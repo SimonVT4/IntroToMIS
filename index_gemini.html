@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduFlow | Modern Course Management</title>
+    
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/react-router-dom@6.3.0/umd/react-router-dom.production.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        neutralBg: '#F8FAFC',
+                        textMain: '#1E293B',
+                        textMuted: '#64748B',
+                        accent: '#F59E0B',
+                        danger: '#EF4444',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            background-color: #F8FAFC;
+            color: #1E293B;
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(226, 232, 240, 0.8);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useContext, createContext, useReducer, useMemo } = React;
+        const { HashRouter, Routes, Route, Link, useNavigate, useParams, useLocation } = window.ReactRouterDOM;
+
+        // --- 1. MOCK DATA ---
+        const mockData = {
+            user: {
+                id: 1,
+                name: "Alex Johnson",
+                role: "Student",
+                avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Alex",
+                email: "alex.j@eduflow.edu"
+            },
+            courses: [
+                { id: 1, title: "Advanced React Patterns", code: "CS302", instructor: "Dr. Sarah Smith", progress: 75, color: "bg-blue-100", icon: "Code", description: "Master high-level patterns including HOCs, Render Props, and Compound Components." },
+                { id: 2, title: "Introduction to Cybersecurity", code: "CYB101", instructor: "James Wilson", progress: 40, color: "bg-emerald-100", icon: "ShieldCheck", description: "Learn the fundamentals of network security, encryption, and threat assessment." },
+                { id: 3, title: "UI/UX Design Systems", code: "DSGN204", instructor: "Elena Rodriguez", progress: 90, color: "bg-purple-100", icon: "Palette", description: "Building scalable design systems with Figma and utility-first CSS." },
+                { id: 4, title: "Database Architecture", code: "DB404", instructor: "Michael Chen", progress: 15, color: "bg-amber-100", icon: "Database", description: "Deep dive into SQL, NoSQL, and database optimization techniques." }
+            ],
+            activity: [
+                { id: 1, text: "Assignment 'React Basics' graded:", status: "A", date: "2 hours ago" },
+                { id: 2, text: "New resource posted in 'Cybersecurity'", status: "PDF", date: "5 hours ago" },
+                { id: 3, text: "Joined 'UI/UX Design' group chat", status: "Success", date: "Yesterday" }
+            ],
+            assignments: [
+                { id: 101, courseId: 1, title: "Compound Components Lab", dueDate: "2024-06-15", status: "Submitted" },
+                { id: 102, courseId: 1, title: "State Reducer Pattern Quiz", dueDate: "2024-06-20", status: "Pending" },
+                { id: 103, courseId: 2, title: "Nmap Scanning Report", dueDate: "2024-06-12", status: "Graded" }
+            ]
+        };
+
+        // --- 2. CONTEXT & STATE MANAGEMENT ---
+        const AppContext = createContext();
+
+        const appReducer = (state, action) => {
+            switch (action.type) {
+                case 'SET_USER': return { ...state, user: action.payload };
+                case 'UPDATE_PROGRESS': 
+                    return { 
+                        ...state, 
+                        courses: state.courses.map(c => c.id === action.payload.id ? { ...c, progress: action.payload.progress } : c) 
+                    };
+                default: return state;
+            }
+        };
+
+        const AppProvider = ({ children }) => {
+            const [state, dispatch] = useReducer(appReducer, {
+                user: mockData.user,
+                courses: mockData.courses,
+                activity: mockData.activity,
+                assignments: mockData.assignments
+            });
+
+            return (
+                <AppContext.Provider value={{ state, dispatch }}>
+                    {children}
+                </AppContext.Provider>
+            );
+        };
+
+        // --- 3. REUSABLE COMPONENTS ---
+        
+        const Icon = ({ name, className = "w-5 h-5" }) => {
+            useEffect(() => {
+                lucide.createIcons();
+            }, [name]);
+            return <i data-lucide={name.toLowerCase()} className={className}></i>;
+        };
+
+        const Card = ({ children, className = "" }) => (
+            <div className={`bg-white rounded-xl shadow-sm border border-slate-200 p-6 ${className}`}>
+                {children}
+            </div>
+        );
+
+        const ProgressBar = ({ progress, colorClass = "bg-primary" }) => (
+            <div className="w-full bg-slate-100 rounded-full h-2 mt-4">
+                <div 
+                    className={`${colorClass} h-2 rounded-full transition-all duration-1000 ease-out`} 
+                    style={{ width: `${progress}%` }}
+                ></div>
+            </div>
+        );
+
+        // --- 4. LAYOUT & NAVIGATION ---
+
+        const Navbar = () => {
+            const { state } = useContext(AppContext);
+            const [isProfileOpen, setIsProfileOpen] = useState(false);
+
+            return (
+                <nav className="glass-effect sticky top-0 z-50 px-4 md:px-8 py-3 flex items-center justify-between">
+                    <div className="flex items-center gap-8">
+                        <Link to="/" className="flex items-center gap-2 group">
+                            <div className="bg-primary p-1.5 rounded-lg">
+                                <Icon name="Zap" className="w-6 h-6 text-white" />
+                            </div>
+                            <span className="text-xl font-bold tracking-tight text-textMain">EduFlow</span>
+                        </Link>
+                        
+                        <div className="hidden md:flex items-center gap-6">
+                            <Link to="/" className="text-textMuted hover:text-primary font-medium transition-colors">Dashboard</Link>
+                            <Link to="/courses" className="text-textMuted hover:text-primary font-medium transition-colors">Courses</Link>
+                            <Link to="#" className="text-textMuted hover:text-primary font-medium transition-colors">Grades</Link>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                        <button className="p-2 text-textMuted hover:bg-slate-100 rounded-full transition-colors relative">
+                            <Icon name="Bell" />
+                            <span className="absolute top-2 right-2 w-2 h-2 bg-danger rounded-full border-2 border-white"></span>
+                        </button>
+                        
+                        <div className="relative">
+                            <button 
+                                onClick={() => setIsProfileOpen(!isProfileOpen)}
+                                className="flex items-center gap-3 p-1 pr-3 hover:bg-slate-100 rounded-full transition-all"
+                            >
+                                <img src={state.user.avatar} className="w-8 h-8 rounded-full bg-slate-200" alt="Avatar" />
+                                <span className="hidden sm:inline text-sm font-semibold text-textMain">{state.user.name}</span>
+                                <Icon name="ChevronDown" className={`w-4 h-4 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {isProfileOpen && (
+                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-2 animate-in fade-in slide-in-from-top-2">
+                                    <button className="w-full text-left px-4 py-2 text-sm text-textMain hover:bg-slate-50 flex items-center gap-2">
+                                        <Icon name="User" className="w-4 h-4" /> Profile
+                                    </button>
+                                    <button className="w-full text-left px-4 py-2 text-sm text-textMain hover:bg-slate-50 flex items-center gap-2">
+                                        <Icon name="Settings" className="w-4 h-4" /> Settings
+                                    </button>
+                                    <hr className="my-1 border-slate-100" />
+                                    <button className="w-full text-left px-4 py-2 text-sm text-danger hover:bg-red-50 flex items-center gap-2">
+                                        <Icon name="LogOut" className="w-4 h-4" /> Logout
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </nav>
+            );
+        };
+
+        const Layout = ({ children }) => (
+            <div className="min-h-screen flex flex-col">
+                <Navbar />
+                <main className="flex-grow p-4 md:p-8 max-w-7xl mx-auto w-full">
+                    {children}
+                </main>
+                <footer className="py-6 text-center text-textMuted text-sm border-t border-slate-200">
+                    &copy; 2024 EduFlow Learning Systems. Built with React & Tailwind.
+                </footer>
+            </div>
+        );
+
+        // --- 5. PAGE VIEWS ---
+
+        const Dashboard = () => {
+            const { state } = useContext(AppContext);
+
+            return (
+                <div className="space-y-8 animate-in fade-in duration-500">
+                    <header>
+                        <h1 className="text-3xl font-bold text-textMain">Welcome back, {state.user.name.split(' ')[0]}! 👋</h1>
+                        <p className="text-textMuted mt-1">Here's what's happening with your studies today.</p>
+                    </header>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <Card className="flex items-center gap-4">
+                            <div className="p-3 bg-blue-50 rounded-lg text-primary">
+                                <Icon name="BookOpen" className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-textMuted">Enrolled Courses</p>
+                                <p className="text-2xl font-bold text-textMain">{state.courses.length}</p>
+                            </div>
+                        </Card>
+                        <Card className="flex items-center gap-4">
+                            <div className="p-3 bg-amber-50 rounded-lg text-accent">
+                                <Icon name="Clock" className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-textMuted">Assignments Due</p>
+                                <p className="text-2xl font-bold text-textMain">3</p>
+                            </div>
+                        </Card>
+                        <Card className="flex items-center gap-4">
+                            <div className="p-3 bg-emerald-50 rounded-lg text-secondary">
+                                <Icon name="Trophy" className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-medium text-textMuted">Avg. Grade</p>
+                                <p className="text-2xl font-bold text-textMain">A-</p>
+                            </div>
+                        </Card>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <section>
+                            <h2 className="text-xl font-bold text-textMain mb-4">Recent Activity</h2>
+                            <div className="space-y-4">
+                                {state.activity.map(act => (
+                                    <div key={act.id} className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-100 shadow-sm">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-2 h-2 rounded-full bg-primary"></div>
+                                            <p className="text-sm text-textMain">{act.text} <span className="font-bold">{act.status}</span></p>
+                                        </div>
+                                        <span className="text-xs text-textMuted">{act.date}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+
+                        <section>
+                            <h2 className="text-xl font-bold text-textMain mb-4">Upcoming Deadlines</h2>
+                            <Card className="p-0 overflow-hidden">
+                                {state.assignments.map((asgn, idx) => (
+                                    <div key={asgn.id} className={`p-4 flex items-center justify-between ${idx !== state.assignments.length - 1 ? 'border-bottom border-slate-100' : ''}`}>
+                                        <div>
+                                            <p className="font-semibold text-textMain">{asgn.title}</p>
+                                            <p className="text-xs text-textMuted">Due: {asgn.dueDate}</p>
+                                        </div>
+                                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${asgn.status === 'Submitted' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                            {asgn.status}
+                                        </span>
+                                    </div>
+                                ))}
+                            </Card>
+                        </section>
+                    </div>
+                </div>
+            );
+        };
+
+        const Courses = () => {
+            const { state } = useContext(AppContext);
+            const [search, setSearch] = useState("");
+
+            const filteredCourses = state.courses.filter(c => 
+                c.title.toLowerCase().includes(search.toLowerCase()) || 
+                c.code.toLowerCase().includes(search.toLowerCase())
+            );
+
+            return (
+                <div className="space-y-8 animate-in fade-in duration-500">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                            <h1 className="text-3xl font-bold text-textMain">My Courses</h1>
+                            <p className="text-textMuted mt-1">Manage and track your academic progress.</p>
+                        </div>
+                        <div className="relative">
+                            <Icon name="Search" className="absolute left-3 top-1/2 -translate-y-1/2 text-textMuted w-4 h-4" />
+                            <input 
+                                type="text" 
+                                placeholder="Search courses..." 
+                                className="pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all w-full md:w-64"
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {filteredCourses.map(course => (
+                            <Link to={`/course/${course.id}`} key={course.id}>
+                                <div className="bg-white rounded-2xl border border-slate-200 p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:border-primary/30 group">
+                                    <div className={`w-12 h-12 rounded-xl ${course.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
+                                        <Icon name={course.icon} className="text-textMain w-6 h-6" />
+                                    </div>
+                                    <p className="text-xs font-bold text-primary tracking-wider uppercase">{course.code}</p>
+                                    <h3 className="text-xl font-bold text-textMain mt-1 group-hover:text-primary transition-colors">{course.title}</h3>
+                                    <p className="text-sm text-textMuted mt-2">{course.instructor}</p>
+                                    
+                                    <div className="mt-6">
+                                        <div className="flex justify-between text-xs font-semibold mb-1">
+                                            <span className="text-textMuted">Completion</span>
+                                            <span className="text-textMain">{course.progress}%</span>
+                                        </div>
+                                        <ProgressBar progress={course.progress} colorClass={course.progress > 80 ? "bg-secondary" : "bg-primary"} />
+                                    </div>
+                                </div>
+                            </Link>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
+
+        const CourseDetail = () => {
+            const { courseId } = useParams();
+            const { state } = useContext(AppContext);
+            const [activeTab, setActiveTab] = useState('Syllabus');
+            const navigate = useNavigate();
+
+            const course = state.courses.find(c => c.id === parseInt(courseId));
+
+            if (!course) return <div className="text-center py-20 text-textMuted">Course not found.</div>;
+
+            const tabs = ['Syllabus', 'Assignments', 'Resources', 'Gradebook'];
+
+            return (
+                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <button 
+                        onClick={() => navigate('/courses')}
+                        className="flex items-center gap-2 text-textMuted hover:text-primary mb-6 transition-colors font-medium"
+                    >
+                        <Icon name="ArrowLeft" className="w-4 h-4" /> Back to Courses
+                    </button>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div className="lg:col-span-2 space-y-6">
+                            <header className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+                                <div className={`absolute top-0 right-0 w-32 h-32 ${course.color} rounded-bl-full opacity-50`}></div>
+                                <p className="text-primary font-bold uppercase tracking-widest text-sm">{course.code}</p>
+                                <h1 className="text-4xl font-extrabold text-textMain mt-2">{course.title}</h1>
+                                <div className="flex items-center gap-4 mt-4">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
+                                            <Icon name="User" className="w-4 h-4 text-textMuted" />
+                                        </div>
+                                        <span className="text-sm font-medium text-textMain">{course.instructor}</span>
+                                    </div>
+                                    <div className="h-4 w-px bg-slate-200"></div>
+                                    <div className="flex items-center gap-2">
+                                        <Icon name="Calendar" className="w-4 h-4 text-textMuted" />
+                                        <span className="text-sm font-medium text-textMain">Mon, Wed 10:00 AM</span>
+                                    </div>
+                                </div>
+                            </header>
+
+                            <div className="flex border-b border-slate-200">
+                                {tabs.map(tab => (
+                                    <button
+                                        key={tab}
+                                        onClick={() => setActiveTab(tab)}
+                                        className={`px-6 py-3 text-sm font-bold transition-all relative ${
+                                            activeTab === tab ? 'text-primary' : 'text-textMuted hover:text-textMain'
+                                        }`}
+                                    >
+                                        {tab}
+                                        {activeTab === tab && (
+                                            <div className="absolute bottom-0 left-0 w-full h-0.5 bg-primary animate-in fade-in scale-x-100"></div>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm min-h-[300px]">
+                                {activeTab === 'Syllabus' && (
+                                    <div className="space-y-4">
+                                        <h3 className="text-xl font-bold text-textMain">About this Course</h3>
+                                        <p className="text-textMuted leading-relaxed">{course.description}</p>
+                                        <h4 className="font-bold text-textMain mt-6">Learning Objectives</h4>
+                                        <ul className="list-disc list-inside text-textMuted space-y-2">
+                                            <li>Understand the core principles of the subject matter.</li>
+                                            <li>Apply theoretical knowledge to practical lab scenarios.</li>
+                                            <li>Collaborate on industry-standard projects.</li>
+                                        </ul>
+                                    </div>
+                                )}
+                                {activeTab === 'Assignments' && (
+                                    <div className="space-y-4">
+                                        {state.assignments.filter(a => a.courseId === course.id).map(a => (
+                                            <div key={a.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+                                                <div className="flex items-center gap-3">
+                                                    <Icon name="FileText" className="text-textMuted" />
+                                                    <span className="font-semibold">{a.title}</span>
+                                                </div>
+                                                <button className="text-primary text-sm font-bold hover:underline">View Task</button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                {['Resources', 'Gradebook'].includes(activeTab) && (
+                                    <div className="flex flex-col items-center justify-center py-12 text-textMuted">
+                                        <Icon name="Inbox" className="w-12 h-12 mb-4 opacity-20" />
+                                        <p>No {activeTab.toLowerCase()} posted yet.</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="space-y-6">
+                            <Card>
+                                <h3 className="text-lg font-bold text-textMain mb-4">Course Progress</h3>
+                                <div className="text-center py-4">
+                                    <div className="inline-flex items-center justify-center p-6 border-8 border-slate-50 rounded-full relative">
+                                        <span className="text-3xl font-black text-primary">{course.progress}%</span>
+                                    </div>
+                                </div>
+                                <button className="w-full mt-4 bg-primary text-white py-3 rounded-xl font-bold hover:bg-blue-600 transition-colors shadow-lg shadow-primary/20">
+                                    Continue Lesson
+                                </button>
+                            </Card>
+
+                            <Card className="bg-slate-900 text-white">
+                                <h3 className="text-lg font-bold mb-2">Need help?</h3>
+                                <p className="text-slate-400 text-sm mb-4">Contact your instructor or join the student discord.</p>
+                                <div className="space-y-2">
+                                    <button className="w-full py-2 bg-white/10 rounded-lg text-sm font-medium hover:bg-white/20 transition-all flex items-center justify-center gap-2">
+                                        <Icon name="Mail" className="w-4 h-4" /> Message Instructor
+                                    </button>
+                                </div>
+                            </Card>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- 6. MAIN APP ASSEMBLY ---
+
+        const App = () => {
+            return (
+                <AppProvider>
+                    <HashRouter>
+                        <Layout>
+                            <Routes>
+                                <Route path="/" element={<Dashboard />} />
+                                <Route path="/courses" element={<Courses />} />
+                                <Route path="/course/:courseId" element={<CourseDetail />} />
+                            </Routes>
+                        </Layout>
+                    </HashRouter>
+                </AppProvider>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
